@@ -4,12 +4,19 @@
   "description": "Claude Code skills for EBM Next.js projects — scaffold auth, tables, forms, uploads, and more",
   "type": "module",
   "bin": {
-    "ebm-skills": "./bin/cli.js"
+    "ebm-skills": "bin/cli.js"
   },
   "files": [
     "bin",
     "skills"
   ],
-  "keywords": ["claude-code", "nextjs", "scaffold", "ebm"],
+  "keywords": [
+    "claude-code",
+    "antigravity",
+    "cursor",
+    "nextjs",
+    "scaffold",
+    "ebm"
+  ],
   "license": "MIT"
 }
