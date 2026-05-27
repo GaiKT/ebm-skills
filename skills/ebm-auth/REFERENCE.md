@@ -29,11 +29,12 @@ UI generation rules:
 |------|---------|
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth handler |
 | `src/app/api/auth/[...nextauth]/auth-options.ts` | JWT config, providers, callbacks |
-| `src/middleware.ts` | Route protection, first-login redirect |
+| `src/middleware.ts` | Route protection, first-login redirect (JWT-only, no DB) |
 | `src/lib/auth.ts` | hashPassword, comparePasswords, findUserByEmail |
 | `src/lib/authorisation.ts` | CASL buildAbilityFor |
 | `src/lib/permission.ts` | getDataPermission (DB query) |
-| `src/lib/prisma.ts` | Prisma client singleton |
+| `src/lib/prisma.ts` | Prisma client — Node.js runtime (API routes, server actions) |
+| `src/lib/prisma-edge.ts` | Prisma client — Edge runtime (middleware, if DB lookup needed) |
 | `src/services/AuthProvider.tsx` | SessionProvider client wrapper |
 | `src/services/AbilityProvider.tsx` | CASL ability context, syncs on session change |
 | `src/store/useAbilityStore.ts` | Zustand store for abilities |
@@ -61,11 +62,51 @@ declare module 'next-auth' {
 }
 ```
 
+### src/lib/prisma.ts (Node runtime — API routes, server actions)
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+```
+
+### src/lib/prisma-edge.ts (Edge runtime — middleware only, when DB lookup required)
+```typescript
+import { PrismaClient } from '@prisma/client/edge'
+import { withAccelerate } from '@prisma/extension-accelerate'
+
+export const prismaEdge = new PrismaClient().$extends(withAccelerate())
+```
+
+Install: `npm install @prisma/extension-accelerate`
+
 ### middleware.ts
 ```typescript
+// Lightweight JWT-only middleware — do NOT import prisma.ts here (Node runtime incompatible with Edge)
+// Use prisma-edge.ts only if a DB lookup is truly required in middleware
 // withAuth — public routes: /signin, /forgot-password, /reset-password
 // reset_password === false → redirect to /change-password-first
 // no token → redirect to /signin
+
+import { withAuth } from 'next-auth/middleware'
+import { NextResponse } from 'next/server'
+
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token
+    if (token?.reset_password === false && req.nextUrl.pathname !== '/change-password-first') {
+      return NextResponse.redirect(new URL('/change-password-first', req.url))
+    }
+  },
+  {
+    callbacks: { authorized: ({ token }) => !!token },
+  }
+)
+
+export const config = {
+  matcher: ['/((?!api/auth|signin|forgot-password|reset-password|_next|favicon).*)'],
+}
 ```
 
 ---
@@ -154,13 +195,24 @@ declare module 'next-auth' {
 // User: admin@example.com / Admin@1234, reset_password: true
 ```
 
-Add to `package.json`:
+Add `seed` script to `package.json` scripts only:
 ```json
 {
-  "scripts": { "seed": "tsx prisma/seed.ts" },
-  "prisma": { "seed": "tsx prisma/seed.ts" }
+  "scripts": { "seed": "tsx prisma/seed.ts" }
 }
 ```
+
+**Do NOT add a `"prisma"` key to `package.json`** — deprecated in Prisma v7. Declare seed in `prisma.config.ts` instead (update the file ebm-init generated):
+```ts
+import { defineConfig } from 'prisma/config'
+
+export default defineConfig({
+  earlyAccess: true,
+  schema: 'prisma/schema.prisma',
+  seed: 'tsx prisma/seed.ts',
+})
+```
+
 devDependencies: `tsx` (NOT ts-node — breaks on Windows)
 
 ---
@@ -256,7 +308,9 @@ department_operations (department_id, operation_id)
 ```env
 NEXTAUTH_SECRET=your-secret-here
 NEXTAUTH_URL=http://localhost:3000
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app
+# Required only if middleware needs DB lookup (prisma-edge.ts / Prisma Accelerate)
+DATABASE_URL_EDGE=
 # Azure AD (optional)
 AZURE_AD_CLIENT_ID=
 AZURE_AD_CLIENT_SECRET=
@@ -290,10 +344,11 @@ Default credentials:
   Password: Admin@1234
 
 Next steps:
-1. npm install next-auth bcryptjs @casl/ability zustand
+1. npm install next-auth bcryptjs @casl/ability zustand @prisma/extension-accelerate
 2. npm install -D @types/bcryptjs tsx
 3. Copy .env.example → .env.local and fill in values
-4. npx prisma migrate dev --name init
-5. npx prisma db seed
-6. npm run dev
+4. [if not already running] docker compose up -d
+5. npx prisma migrate dev --name init
+6. npx prisma db seed
+7. npm run dev
 ```

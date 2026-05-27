@@ -125,7 +125,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Tailwind v4 setup (if tailwind: true)
+## Tailwind v4 setup (if tailwind: true, uiLib != 'shadcn')
 
 ```css
 /* src/app/globals.css */
@@ -153,16 +153,126 @@ Install: `tailwindcss @tailwindcss/postcss`
 
 ## UI Library setup
 
-### shadcn/ui
+### shadcn/ui — DO NOT run `shadcn init`
+
+**Critical:** `npx shadcn@latest init` will **overwrite** `globals.css` and break the Tailwind v4 + primary-color setup. Instead, generate the four files shadcn needs directly. Users can still run `npx shadcn@latest add button` afterwards because `components.json` will exist.
+
+**Install deps:**
 ```bash
-npx shadcn@latest init
-# Answer prompts: style=default, baseColor=slate, cssVariables=yes
+npm install clsx tailwind-merge tailwindcss @tailwindcss/postcss
 ```
-Then install components as needed: `npx shadcn@latest add button input card`
+
+**1. `src/app/globals.css`** — Tailwind v4 + shadcn CSS vars merged.
+
+Convert `ebm.config.json` → `primaryColor` hex to HSL for `--primary`. Format: `H S% L%` (no `hsl()` wrapper).
+
+Common conversions: `#3b82f6` → `217 91% 60%` · `#ef4444` → `0 84% 60%` · `#10b981` → `160 84% 39%` · `#8b5cf6` → `262 83% 58%` · `#f59e0b` → `38 92% 50%`
+
+```css
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: <H> <S>% <L>%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius: var(--radius);
+}
+```
+
+**2. `components.json`** at project root:
+```json
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "default",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/app/globals.css",
+    "baseColor": "slate",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils"
+  }
+}
+```
+
+**3. `src/lib/utils.ts`:**
+```ts
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+```
 
 ### Ant Design
 ```bash
-npm install antd @ant-design/icons
+npm install antd @ant-design/icons @ant-design/nextjs-registry
 ```
 ```tsx
 // src/app/layout.tsx — wrap with AntdRegistry for SSR
@@ -170,11 +280,10 @@ import { AntdRegistry } from '@ant-design/nextjs-registry'
 // ...
 <AntdRegistry>{children}</AntdRegistry>
 ```
-Install: `npm install @ant-design/nextjs-registry`
 
 ### MUI (Material UI)
 ```bash
-npm install @mui/material @emotion/react @emotion/styled @mui/icons-material
+npm install @mui/material @emotion/react @emotion/styled @mui/icons-material @mui/material-nextjs
 ```
 ```tsx
 // src/app/layout.tsx — wrap with AppRouterCacheProvider
@@ -182,18 +291,29 @@ import { AppRouterCacheProvider } from '@mui/material-nextjs/v14-appRouter'
 // ...
 <AppRouterCacheProvider>{children}</AppRouterCacheProvider>
 ```
-Install: `npm install @mui/material-nextjs`
 
 ---
 
 ## Database setup
 
-### Prisma
+### Prisma (v7+)
 ```bash
 npm install @prisma/client
 npm install -D prisma
 npx prisma init --datasource-provider [postgresql|mysql|sqlite]
 ```
+
+**Required: `prisma.config.ts` at project root** — Prisma v7 reads config from this file:
+```ts
+import { defineConfig } from 'prisma/config'
+
+export default defineConfig({
+  earlyAccess: true,
+  schema: 'prisma/schema.prisma',
+})
+```
+
+Do **not** add a `"prisma"` key to `package.json` — it is deprecated in v7.
 
 ### Drizzle
 ```bash
@@ -213,6 +333,58 @@ export default defineConfig({
   dbCredentials: { url: process.env.DATABASE_URL! },
 })
 ```
+
+---
+
+## Docker Compose (if database selected, not SQLite)
+
+Generate `docker-compose.yml` at project root so the DB runs locally without manual setup.
+
+### PostgreSQL
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
+### MySQL
+```yaml
+services:
+  db:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: app
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+volumes:
+  mysqldata:
+```
+
+### SQLite — skip (file-based, no container needed)
+
+Default `DATABASE_URL` in `.env.example`:
+- Postgres: `postgresql://postgres:postgres@localhost:5432/app`
+- MySQL: `mysql://app:app@localhost:3306/app`
+- SQLite: `file:./dev.db`
 
 ---
 
@@ -256,8 +428,9 @@ Stack:
 Next steps:
 1. npm install (or yarn/pnpm install)
 2. Copy .env.example → .env.local
-3. [if DB] npx prisma migrate dev --name init
-4. npm run dev
+3. [if DB && not SQLite] docker compose up -d
+4. [if Prisma] npx prisma migrate dev --name init
+5. npm run dev
 
 [if backoffice or both]
 → Run /ebm-auth to add authentication

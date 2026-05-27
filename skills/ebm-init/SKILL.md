@@ -25,6 +25,10 @@ npx create-next-app@latest . --typescript --app --src-dir --no-tailwind --no-esl
 ```
 Then scaffold additional files per answers. See [REFERENCE.md](REFERENCE.md).
 
+### Step 2.5 — Docker Compose (if DB selected and not SQLite)
+Generate `docker-compose.yml` with DB service + named volume.
+Print: "Run `docker compose up -d` before `npx prisma migrate dev`"
+
 ### Step 3 — Save config
 Write answers to `ebm.config.json` in project root.
 
