@@ -5,7 +5,9 @@ import { homedir } from 'os'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ALL_SKILLS = ['ebm-init', 'ebm-auth', 'ebm-table', 'ebm-form', 'ebm-upload', 'ebm-thai']
+const ALL_SKILLS = ['ebm-init', 'ebm-auth', 'ebm-table', 'ebm-form', 'ebm-upload', 'ebm-thai', 'ebm-mask']
+// Practices that must apply in every project, not only when invoked
+const ALWAYS_APPLY = new Set(['ebm-mask'])
 const packageSkillsDir = join(__dirname, '..', 'skills')
 
 const onlyIndex = process.argv.indexOf('--only')
@@ -20,13 +22,13 @@ async function pathExists(p) {
   try { await access(p); return true } catch { return false }
 }
 
-async function convertToCursorMdc(skillDir) {
+async function convertToCursorMdc(skillDir, alwaysApply = false) {
   const skillMd = await readFile(join(skillDir, 'SKILL.md'), 'utf8')
   const m = skillMd.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/m)
   if (!m) return skillMd
   const descMatch = m[1].match(/description:\s*(.+)/)
   const description = descMatch ? descMatch[1].trim() : ''
-  return `---\ndescription: ${description}\nalwaysApply: false\n---\n${m[2]}`
+  return `---\ndescription: ${description}\nalwaysApply: ${alwaysApply}\n---\n${m[2]}`
 }
 
 // Read all stdin lines upfront (supports both interactive TTY and piped input)
@@ -124,7 +126,7 @@ async function main() {
       try {
         if (target.type === 'cursor') {
           await mkdir(target.dest, { recursive: true })
-          const mdc = await convertToCursorMdc(src)
+          const mdc = await convertToCursorMdc(src, ALWAYS_APPLY.has(skill))
           await writeFile(join(target.dest, `${skill}.mdc`), mdc, 'utf8')
         } else {
           const dest = join(target.dest, skill)
